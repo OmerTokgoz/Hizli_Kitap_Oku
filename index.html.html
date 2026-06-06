@@ -3,609 +3,738 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Hızlı Okuyucu</title>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;700&family=Bebas+Neue&display=swap" rel="stylesheet">
+<title>HızlıOku</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;500&family=DM+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
-  :root {
-    --bg: #0a0a0f;
-    --surface: #111118;
-    --border: #1e1e2e;
-    --accent: #e8ff5a;
-    --accent2: #ff5a8a;
-    --text: #e8e8f0;
-    --muted: #55556a;
-    --word-size: clamp(2.5rem, 8vw, 5rem);
-  }
+:root{
+  --bg:#07080d;--surface:#0e0f17;--surface2:#161722;--border:#1f2035;
+  --accent:#c8f135;--accent2:#f1356e;--accent3:#35b8f1;--accent4:#f1a135;
+  --text:#dde0f0;--muted:#4a4d6a;
+  --mono:'DM Mono',monospace;--sans:'DM Sans',sans-serif;--display:'Bebas Neue',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;display:flex;flex-direction:column;}
+body::after{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 80% 50% at 50% -5%,rgba(200,241,53,.035) 0%,transparent 65%);pointer-events:none;z-index:0;}
 
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+/* HEADER */
+header{position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:1rem;padding:.85rem 1.8rem;background:rgba(7,8,13,.93);backdrop-filter:blur(14px);border-bottom:1px solid var(--border);}
+.logo{font-family:var(--display);font-size:1.65rem;letter-spacing:.08em;color:var(--accent);}
+.logo em{color:var(--accent2);font-style:normal;}
+.hbadge{margin-left:auto;font-family:var(--mono);font-size:.68rem;color:var(--muted);border:1px solid var(--border);padding:.22rem .65rem;border-radius:2px;}
+.hbadge strong{color:var(--accent);}
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'JetBrains Mono', monospace;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    overflow-x: hidden;
-  }
+/* TABS */
+.app-tabs{display:flex;border-bottom:1px solid var(--border);position:relative;z-index:1;}
+.app-tab{padding:.65rem 1.3rem;font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;font-family:var(--mono);color:var(--muted);cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;transition:all .2s;}
+.app-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.app-tab:hover:not(.active){color:var(--text);}
 
-  /* Noise texture overlay */
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
-    pointer-events: none;
-    z-index: 1000;
-    opacity: 0.4;
-  }
+.app-body{flex:1;display:flex;flex-direction:column;position:relative;z-index:1;}
+.tab-panel{display:none;flex:1;flex-direction:column;}
+.tab-panel.active{display:flex;}
 
-  header {
-    padding: 1.5rem 2rem;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-  }
+/* ══ READER ══ */
+.reader{flex:1;display:grid;grid-template-rows:1fr auto;padding:1.5rem;gap:1.5rem;max-width:960px;width:100%;margin:0 auto;}
+.stage{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.9rem;}
+.progress-wrap{width:100%;height:2px;background:var(--border);border-radius:1px;position:relative;}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:1px;width:0%;transition:width .12s;}
+.page-marker{position:absolute;top:-3px;height:8px;width:2px;background:var(--accent4);border-radius:1px;}
+.word-stage{width:100%;min-height:155px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.9rem;}
+.word-main{font-family:var(--display);font-size:clamp(2.8rem,7vw,5.5rem);letter-spacing:.04em;text-align:center;}
+.word-main .orp{color:var(--accent2);}
+.word-main.pop{animation:pop .1s ease;}
+@keyframes pop{0%{opacity:0;transform:scale(.93)}100%{opacity:1;transform:scale(1)}}
+.ctx-line{font-family:var(--mono);font-size:.77rem;color:var(--muted);text-align:center;height:1.4em;}
+.ctx-line .cp{opacity:.32;margin-right:.6rem;}
+.ctx-line .cn{opacity:.32;margin-left:.6rem;}
+.stats-row{display:flex;gap:2rem;justify-content:center;font-family:var(--mono);font-size:.63rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;flex-wrap:wrap;}
+.stat strong{display:block;font-size:1.1rem;color:var(--text);font-weight:500;}
+.stat.highlight strong{color:var(--accent4);}
+.idle-big{font-family:var(--display);font-size:3.8rem;color:var(--border);letter-spacing:.1em;display:block;text-align:center;}
+.idle-sub{font-size:.78rem;color:var(--muted);text-align:center;display:block;}
+.done-big{font-family:var(--display);font-size:3.2rem;color:var(--accent);letter-spacing:.1em;text-align:center;}
 
-  .logo {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 1.8rem;
-    letter-spacing: 0.1em;
-    color: var(--accent);
-  }
+/* CTRL CARD */
+.ctrl-card{border:1px solid var(--border);background:var(--surface);border-radius:6px;overflow:hidden;}
+.ctrl-inner{padding:1.1rem 1.4rem;}
+.ctrl-grid{display:grid;grid-template-columns:1fr 1fr;gap:.9rem;}
+.cg label{display:block;font-family:var(--mono);font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:.4rem;}
+.sr{display:flex;align-items:center;gap:.6rem;}
+input[type=range]{-webkit-appearance:none;flex:1;height:2px;background:var(--border);outline:none;border-radius:1px;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;background:var(--accent);border-radius:50%;cursor:pointer;}
+.sv{font-family:var(--mono);font-size:.8rem;color:var(--accent);min-width:3.5ch;text-align:right;}
 
-  .logo span { color: var(--accent2); }
+/* PAGE RANGE */
+.page-range-bar{display:flex;align-items:center;gap:.8rem;padding:.75rem 1.4rem;border-top:1px solid var(--border);background:rgba(241,161,53,.04);flex-wrap:wrap;}
+.pr-label{font-family:var(--mono);font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent4);white-space:nowrap;}
+.pr-inputs{display:flex;align-items:center;gap:.5rem;flex:1;}
+.pr-input{width:65px;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:.82rem;padding:.35rem .6rem;border-radius:3px;outline:none;text-align:center;}
+.pr-input:focus{border-color:var(--accent4);}
+.pr-sep{color:var(--muted);font-size:.8rem;}
+.pr-info{font-family:var(--mono);font-size:.65rem;color:var(--muted);margin-left:auto;}
+.pr-btn{background:none;border:1px solid var(--accent4);color:var(--accent4);font-family:var(--mono);font-size:.65rem;letter-spacing:.08em;text-transform:uppercase;padding:.35rem .8rem;border-radius:3px;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.pr-btn:hover{background:rgba(241,161,53,.1);}
 
-  .wpm-badge {
-    margin-left: auto;
-    font-size: 0.75rem;
-    color: var(--muted);
-    border: 1px solid var(--border);
-    padding: 0.3rem 0.8rem;
-    border-radius: 2px;
-  }
+.playback{display:flex;align-items:center;justify-content:center;gap:.7rem;padding:.9rem 1.4rem;border-top:1px solid var(--border);flex-wrap:wrap;}
+.btn{background:none;border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;padding:.5rem 1rem;cursor:pointer;border-radius:3px;transition:all .15s;}
+.btn:hover{border-color:var(--accent);color:var(--accent);}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--bg);font-weight:500;padding:.6rem 1.8rem;font-size:.82rem;}
+.btn.primary:hover{background:#d8f54a;border-color:#d8f54a;}
+.btn.danger{border-color:var(--accent2);color:var(--accent2);}
+.btn.danger:hover{background:rgba(241,53,110,.08);}
 
-  .wpm-badge strong { color: var(--accent); }
+/* ══ SOURCE ══ */
+.source-panel{flex:1;display:flex;gap:1.5rem;max-width:1100px;width:100%;margin:0 auto;padding:1.5rem;}
+.source-left{width:340px;flex-shrink:0;display:flex;flex-direction:column;gap:1rem;}
+.source-right{flex:1;display:flex;flex-direction:column;gap:1rem;}
+.method-tabs{display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden;}
+.method-tab{flex:1;padding:.55rem;font-size:.65rem;letter-spacing:.07em;text-transform:uppercase;font-family:var(--mono);color:var(--muted);cursor:pointer;border:none;background:none;transition:all .2s;}
+.method-tab.active{background:var(--surface2);color:var(--accent);}
+.method-body{border:1px solid var(--border);border-radius:6px;background:var(--surface);}
+.msec{display:none;padding:1.1rem;}
+.msec.active{display:block;}
+textarea{width:100%;min-height:130px;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:.78rem;padding:.85rem;border-radius:4px;resize:vertical;outline:none;line-height:1.65;}
+textarea:focus{border-color:var(--accent);}
+textarea::placeholder{color:var(--muted);}
+.search-box{display:flex;gap:.5rem;margin-bottom:.75rem;}
+.si{flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:.8rem;padding:.55rem .85rem;border-radius:4px;outline:none;}
+.si:focus{border-color:var(--accent3);}
+.si::placeholder{color:var(--muted);}
+.btn-search{background:var(--accent3);border:none;color:var(--bg);font-family:var(--mono);font-size:.7rem;letter-spacing:.07em;text-transform:uppercase;padding:.55rem .95rem;border-radius:4px;cursor:pointer;transition:background .15s;white-space:nowrap;}
+.btn-search:hover{background:#5ec9f5;}
+.filter-row{display:flex;gap:.35rem;flex-wrap:wrap;margin-bottom:.75rem;}
+.fchip{padding:.25rem .65rem;font-size:.63rem;letter-spacing:.07em;text-transform:uppercase;font-family:var(--mono);border:1px solid var(--border);border-radius:20px;cursor:pointer;color:var(--muted);background:none;transition:all .15s;}
+.fchip.active{border-color:var(--accent3);color:var(--accent3);background:rgba(53,184,241,.07);}
+.pdf-drop{border:2px dashed var(--border);border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.6rem;padding:2rem;cursor:pointer;transition:all .2s;text-align:center;}
+.pdf-drop:hover,.pdf-drop.dv{border-color:var(--accent);background:rgba(200,241,53,.03);}
+.pdf-icon{font-size:2.2rem;}
+.pdf-lbl{font-size:.78rem;color:var(--muted);}
+.pdf-lbl strong{color:var(--accent);display:block;margin-bottom:.15rem;}
+#pfi{display:none;}
+.pdf-prog{margin-top:.7rem;font-family:var(--mono);font-size:.7rem;color:var(--muted);text-align:center;display:none;}
+.rlist{display:flex;flex-direction:column;gap:.45rem;max-height:360px;overflow-y:auto;}
+.rlist::-webkit-scrollbar{width:3px;}
+.rlist::-webkit-scrollbar-thumb{background:var(--muted);border-radius:2px;}
+.ri{border:1px solid var(--border);border-radius:5px;padding:.8rem .95rem;cursor:pointer;transition:all .2s;background:var(--surface);}
+.ri:hover{border-color:var(--accent3);background:var(--surface2);}
+.ri.sel{border-color:var(--accent);background:rgba(200,241,53,.04);}
+.rt{font-size:.82rem;font-weight:600;margin-bottom:.22rem;color:var(--text);}
+.rs{font-family:var(--mono);font-size:.62rem;color:var(--muted);display:flex;gap:.4rem;align-items:center;}
+.stag{padding:.12rem .38rem;border-radius:2px;font-size:.58rem;letter-spacing:.06em;text-transform:uppercase;}
+.tag-wiki{background:rgba(53,184,241,.14);color:var(--accent3);}
+.tag-gutenberg{background:rgba(200,241,53,.11);color:var(--accent);}
+.rsnip{font-size:.72rem;color:var(--muted);margin-top:.3rem;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
 
-  /* Main layout */
-  main {
-    flex: 1;
-    display: grid;
-    grid-template-rows: 1fr auto;
-    padding: 2rem;
-    gap: 2rem;
-    max-width: 900px;
-    width: 100%;
-    margin: 0 auto;
-  }
+/* PREVIEW */
+.preview-area{flex:1;border:1px solid var(--border);border-radius:6px;background:var(--surface);padding:1.1rem;display:flex;flex-direction:column;gap:.7rem;min-height:200px;}
+.prev-toolbar{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;}
+.prev-title{font-size:.83rem;font-weight:600;color:var(--text);flex:1;}
+.prev-text{flex:1;overflow-y:auto;font-size:.8rem;line-height:1.75;color:var(--text);max-height:260px;}
+.prev-text::-webkit-scrollbar{width:3px;}
+.prev-text::-webkit-scrollbar-thumb{background:var(--muted);border-radius:2px;}
+.prev-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.45rem;color:var(--muted);font-size:.8rem;text-align:center;}
+.prev-empty-icon{font-size:2.2rem;opacity:.28;}
+.load-ind{display:none;flex-direction:column;align-items:center;justify-content:center;gap:.7rem;padding:2rem;color:var(--muted);font-family:var(--mono);font-size:.72rem;}
+.spinner{width:26px;height:26px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.btn-load{background:var(--accent);border:none;color:var(--bg);font-family:var(--mono);font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;padding:.55rem 1.3rem;border-radius:4px;cursor:pointer;font-weight:500;transition:background .15s;white-space:nowrap;}
+.btn-load:hover{background:#d8f54a;}
+.btn-load:disabled{opacity:.38;cursor:not-allowed;}
 
-  /* Word display */
-  .stage {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-  }
+/* ══ LIBRARY ══ */
+.library-panel{flex:1;max-width:900px;width:100%;margin:0 auto;padding:1.5rem;display:flex;flex-direction:column;gap:1rem;}
+.lib-header{display:flex;align-items:center;justify-content:space-between;}
+.lib-title{font-family:var(--display);font-size:1.4rem;letter-spacing:.08em;color:var(--text);}
+.lib-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.5rem;color:var(--muted);font-size:.82rem;text-align:center;min-height:200px;}
+.lib-empty-icon{font-size:2.8rem;opacity:.2;}
+.book-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:.8rem;}
+.book-card{border:1px solid var(--border);border-radius:6px;padding:1rem 1.1rem;background:var(--surface);cursor:pointer;transition:all .2s;position:relative;overflow:hidden;}
+.book-card:hover{border-color:var(--accent3);background:var(--surface2);}
+.book-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent4);}
+.bc-title{font-size:.85rem;font-weight:600;color:var(--text);margin-bottom:.35rem;padding-right:1.5rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.bc-meta{font-family:var(--mono);font-size:.62rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:.55rem;}
+.bc-progress{height:3px;background:var(--border);border-radius:2px;margin-bottom:.5rem;}
+.bc-progress-fill{height:100%;background:linear-gradient(90deg,var(--accent4),var(--accent));border-radius:2px;transition:width .3s;}
+.bc-pct{font-family:var(--mono);font-size:.65rem;color:var(--accent4);}
+.bc-actions{display:flex;gap:.4rem;margin-top:.6rem;}
+.bc-btn{background:none;border:1px solid var(--border);color:var(--muted);font-family:var(--mono);font-size:.6rem;letter-spacing:.07em;text-transform:uppercase;padding:.28rem .6rem;border-radius:3px;cursor:pointer;transition:all .15s;}
+.bc-btn:hover{border-color:var(--accent);color:var(--accent);}
+.bc-btn.del:hover{border-color:var(--accent2);color:var(--accent2);}
+.bc-del{position:absolute;top:.7rem;right:.7rem;background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem;padding:.2rem;transition:color .15s;}
+.bc-del:hover{color:var(--accent2);}
 
-  .progress-bar-wrap {
-    width: 100%;
-    height: 2px;
-    background: var(--border);
-    border-radius: 1px;
-    margin-bottom: 2rem;
-  }
+/* NOTIF */
+.notif{position:fixed;bottom:1.4rem;right:1.4rem;z-index:999;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:.75rem 1.1rem;font-family:var(--mono);font-size:.73rem;color:var(--text);opacity:0;transform:translateY(8px);transition:all .25s;pointer-events:none;max-width:300px;}
+.notif.show{opacity:1;transform:translateY(0);}
+.notif.ok{border-color:var(--accent);color:var(--accent);}
+.notif.err{border-color:var(--accent2);color:var(--accent2);}
+.notif.info{border-color:var(--accent4);color:var(--accent4);}
 
-  .progress-bar {
-    height: 100%;
-    background: linear-gradient(90deg, var(--accent), var(--accent2));
-    border-radius: 1px;
-    width: 0%;
-    transition: width 0.2s ease;
-  }
-
-  .word-container {
-    width: 100%;
-    min-height: 180px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-  }
-
-  /* ORP (Optimal Recognition Point) guide */
-  .orp-line {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    background: var(--accent2);
-    opacity: 0.15;
-    pointer-events: none;
-  }
-
-  .word-display {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: var(--word-size);
-    letter-spacing: 0.05em;
-    text-align: center;
-    position: relative;
-    transition: opacity 0.05s;
-  }
-
-  .word-display .orp-char {
-    color: var(--accent2);
-  }
-
-  .word-display.flash {
-    animation: wordFlash 0.12s ease;
-  }
-
-  @keyframes wordFlash {
-    0% { opacity: 0; transform: scale(0.95); }
-    100% { opacity: 1; transform: scale(1); }
-  }
-
-  .context-words {
-    margin-top: 1.5rem;
-    font-size: 0.8rem;
-    color: var(--muted);
-    text-align: center;
-    height: 1.5em;
-    letter-spacing: 0.05em;
-  }
-
-  .context-words .prev { opacity: 0.4; margin-right: 0.5rem; }
-  .context-words .next { opacity: 0.4; margin-left: 0.5rem; }
-
-  /* Stats row */
-  .stats-row {
-    display: flex;
-    gap: 2rem;
-    justify-content: center;
-    font-size: 0.7rem;
-    color: var(--muted);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-  }
-
-  .stat strong {
-    display: block;
-    font-size: 1.2rem;
-    color: var(--text);
-    font-weight: 700;
-  }
-
-  /* Controls panel */
-  .panel {
-    border: 1px solid var(--border);
-    background: var(--surface);
-    border-radius: 4px;
-    overflow: hidden;
-  }
-
-  .panel-tabs {
-    display: flex;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .tab {
-    padding: 0.7rem 1.2rem;
-    font-size: 0.7rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--muted);
-    cursor: pointer;
-    border: none;
-    background: none;
-    color: var(--muted);
-    font-family: inherit;
-    border-bottom: 2px solid transparent;
-    transition: all 0.2s;
-  }
-
-  .tab.active {
-    color: var(--accent);
-    border-bottom-color: var(--accent);
-  }
-
-  .tab-content {
-    display: none;
-    padding: 1.5rem;
-  }
-
-  .tab-content.active { display: block; }
-
-  textarea {
-    width: 100%;
-    min-height: 120px;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    color: var(--text);
-    font-family: inherit;
-    font-size: 0.85rem;
-    padding: 1rem;
-    border-radius: 2px;
-    resize: vertical;
-    outline: none;
-    line-height: 1.6;
-  }
-
-  textarea:focus { border-color: var(--accent); }
-
-  /* Speed control */
-  .controls-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-    margin-top: 1rem;
-  }
-
-  .control-group label {
-    display: block;
-    font-size: 0.65rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--muted);
-    margin-bottom: 0.5rem;
-  }
-
-  .slider-wrap {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-  }
-
-  input[type=range] {
-    -webkit-appearance: none;
-    flex: 1;
-    height: 2px;
-    background: var(--border);
-    outline: none;
-    border-radius: 1px;
-  }
-
-  input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 14px;
-    height: 14px;
-    background: var(--accent);
-    border-radius: 50%;
-    cursor: pointer;
-  }
-
-  .slider-val {
-    font-size: 0.85rem;
-    color: var(--accent);
-    min-width: 3ch;
-    text-align: right;
-  }
-
-  /* Playback buttons */
-  .playback {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 1rem;
-    padding: 1.2rem;
-    border-top: 1px solid var(--border);
-  }
-
-  .btn {
-    background: none;
-    border: 1px solid var(--border);
-    color: var(--text);
-    font-family: inherit;
-    font-size: 0.75rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    padding: 0.6rem 1.2rem;
-    cursor: pointer;
-    border-radius: 2px;
-    transition: all 0.15s;
-  }
-
-  .btn:hover { border-color: var(--accent); color: var(--accent); }
-
-  .btn.primary {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: var(--bg);
-    font-weight: 700;
-    padding: 0.7rem 2rem;
-    font-size: 0.9rem;
-  }
-
-  .btn.primary:hover { background: #fff; border-color: #fff; }
-
-  .btn.danger { border-color: var(--accent2); color: var(--accent2); }
-
-  /* Idle state */
-  .idle-message {
-    font-size: 0.85rem;
-    color: var(--muted);
-    text-align: center;
-    letter-spacing: 0.08em;
-  }
-
-  .idle-message .big {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 3rem;
-    color: var(--border);
-    display: block;
-    letter-spacing: 0.1em;
-    line-height: 1;
-    margin-bottom: 0.5rem;
-  }
-
-  /* Finished */
-  .finished-msg {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 3rem;
-    color: var(--accent);
-    letter-spacing: 0.1em;
-  }
+@media(max-width:680px){
+  .source-panel{flex-direction:column;padding:1rem;}
+  .source-left{width:100%;}
+  .ctrl-grid{grid-template-columns:1fr;}
+  .playback{gap:.4rem;}
+  .page-range-bar{gap:.5rem;}
+}
 </style>
 </head>
 <body>
-
 <header>
-  <div class="logo">HIZLI<span>OKU</span></div>
-  <div class="wpm-badge">Hız: <strong id="wpmDisplay">300</strong> kpm</div>
+  <div class="logo">HIZLI<em>OKU</em></div>
+  <div class="hbadge">Hız: <strong id="wpmDisplay">300</strong> kpm</div>
 </header>
+<div class="app-tabs">
+  <button class="app-tab active" id="tab-reader" onclick="goTab('reader')">▶ Okuyucu</button>
+  <button class="app-tab" id="tab-source" onclick="goTab('source')">⊕ Kaynak</button>
+  <button class="app-tab" id="tab-library" onclick="goTab('library')">📚 Kitaplık</button>
+</div>
+<div class="app-body">
 
-<main>
-  <div class="stage">
-    <div class="progress-bar-wrap">
-      <div class="progress-bar" id="progressBar"></div>
-    </div>
-
-    <div class="word-container">
-      <div class="word-display" id="wordDisplay">
-        <span class="idle-message">
-          <span class="big">HAZIR</span>
-          metni gir ve başla
-        </span>
+<!-- ═══ READER ═══ -->
+<div class="tab-panel active" id="panel-reader">
+  <div class="reader">
+    <div class="stage">
+      <div class="progress-wrap">
+        <div class="progress-fill" id="progressBar"></div>
+        <div class="page-marker" id="pageEndMarker" style="display:none;right:0;"></div>
+      </div>
+      <div class="word-stage">
+        <div class="word-main" id="wordDisplay">
+          <span class="idle-big">HAZIR</span>
+          <span class="idle-sub">Kaynak Ekle → yükle → başlat</span>
+        </div>
+        <div class="ctx-line" id="ctxLine"></div>
+      </div>
+      <div class="stats-row">
+        <div class="stat"><strong id="sWord">—</strong>kelime</div>
+        <div class="stat"><strong id="sTotal">—</strong>toplam</div>
+        <div class="stat highlight"><strong id="sPage">—</strong>sayfa</div>
+        <div class="stat"><strong id="sTime">—</strong>kalan sn</div>
+        <div class="stat"><strong id="sPct">—</strong>tamamlandı</div>
       </div>
     </div>
-
-    <div class="context-words" id="contextWords"></div>
-
-    <div class="stats-row" style="margin-top:2rem">
-      <div class="stat">
-        <strong id="statWord">—</strong>
-        kelime
+    <div class="ctrl-card">
+      <div class="ctrl-inner">
+        <div class="ctrl-grid">
+          <div class="cg"><label>Hız (kelime/dak)</label><div class="sr"><input type="range" id="wpmSlider" min="60" max="1000" value="300" step="10" oninput="setWPM(+this.value)"><span class="sv" id="wpmVal">300</span></div></div>
+          <div class="cg"><label>Yazı boyutu</label><div class="sr"><input type="range" id="sizeSlider" min="2" max="9" value="5" step=".5" oninput="setSize(+this.value)"><span class="sv" id="sizeVal">5</span></div></div>
+          <div class="cg"><label>Noktalama duraklaması</label><div class="sr"><input type="range" id="pauseSlider" min="1" max="4" value="2" step=".5" oninput="document.getElementById('pauseVal').textContent=this.value"><span class="sv" id="pauseVal">2</span></div></div>
+          <div class="cg"><label>Bağlam kelimeleri</label><div class="sr"><input type="range" id="ctxSlider" min="0" max="3" value="1" step="1" oninput="document.getElementById('ctxVal').textContent=this.value"><span class="sv" id="ctxVal">1</span></div></div>
+        </div>
       </div>
-      <div class="stat">
-        <strong id="statTotal">—</strong>
-        toplam
+      <!-- PAGE RANGE BAR -->
+      <div class="page-range-bar">
+        <span class="pr-label">📄 Sayfa aralığı</span>
+        <div class="pr-inputs">
+          <input class="pr-input" type="number" id="prStart" placeholder="Başl." min="1" title="Başlangıç sayfası">
+          <span class="pr-sep">—</span>
+          <input class="pr-input" type="number" id="prEnd" placeholder="Bitiş" min="1" title="Bitiş sayfası">
+        </div>
+        <span class="pr-info" id="prInfo"></span>
+        <button class="pr-btn" onclick="applyPageRange()">Uygula</button>
+        <button class="pr-btn" onclick="clearPageRange()" style="border-color:var(--muted);color:var(--muted);">Tümü</button>
       </div>
-      <div class="stat">
-        <strong id="statTime">—</strong>
-        kalan sn
+      <div class="playback">
+        <button class="btn" onclick="skipW(-10)">⏮ −10</button>
+        <button class="btn" onclick="skipW(-1)">‹ −1</button>
+        <button class="btn primary" id="playBtn" onclick="togglePlay()">▶ BAŞLAT</button>
+        <button class="btn" onclick="skipW(1)">+1 ›</button>
+        <button class="btn" onclick="skipW(10)">+10 ⏭</button>
+        <button class="btn danger" onclick="resetReader()">↺</button>
       </div>
     </div>
   </div>
+</div>
 
-  <div class="panel">
-    <div class="panel-tabs">
-      <button class="tab active" onclick="switchTab('text')">Metin</button>
-      <button class="tab" onclick="switchTab('settings')">Ayarlar</button>
-    </div>
-
-    <div class="tab-content active" id="tab-text">
-      <textarea id="textInput" placeholder="Okumak istediğin metni buraya yapıştır...">Hızlı okuma tekniği, gözlerin tek tek kelime üzerinde durmasını sağlar. Bu yöntem RSVP olarak bilinir. Beyin, kelimeleri ayrı ayrı işlediğinde çok daha hızlı anlayabilir. Alıştırmayla dakikada beş yüz kelimeye kadar okuyabilirsiniz. Başlamak için oynat düğmesine basın.</textarea>
-      <div class="controls-grid">
-        <div class="control-group">
-          <label>Hız (kelime/dak)</label>
-          <div class="slider-wrap">
-            <input type="range" id="wpmSlider" min="60" max="1000" value="300" step="10" oninput="updateWPM(this.value)">
-            <span class="slider-val" id="wpmVal">300</span>
+<!-- ═══ SOURCE ═══ -->
+<div class="tab-panel" id="panel-source">
+  <div class="source-panel">
+    <div class="source-left">
+      <div class="method-tabs">
+        <button class="method-tab active" id="mt-search" onclick="switchMethod('search',this)">🔍 Ara</button>
+        <button class="method-tab" id="mt-pdf" onclick="switchMethod('pdf',this)">📄 PDF</button>
+        <button class="method-tab" id="mt-text" onclick="switchMethod('text',this)">✏️ Metin</button>
+      </div>
+      <div class="method-body">
+        <div class="msec active" id="msec-search">
+          <div class="search-box">
+            <input class="si" id="searchInput" placeholder="Kitap adı, konu..." onkeydown="if(event.key==='Enter')doSearch()">
+            <button class="btn-search" onclick="doSearch()">Ara</button>
           </div>
+          <div class="filter-row">
+            <button class="fchip active" onclick="setFilter(this,'all')">Tümü</button>
+            <button class="fchip" onclick="setFilter(this,'wiki')">Wikipedia</button>
+            <button class="fchip" onclick="setFilter(this,'gutenberg')">Gutenberg</button>
+          </div>
+          <div id="searchStatus" style="font-family:var(--mono);font-size:.68rem;color:var(--muted);margin-bottom:.45rem;min-height:1.1em;"></div>
+          <div class="rlist" id="resultList"></div>
         </div>
-        <div class="control-group">
-          <label>Yazı Boyutu</label>
-          <div class="slider-wrap">
-            <input type="range" id="sizeSlider" min="2" max="8" value="5" step="0.5" oninput="updateSize(this.value)">
-            <span class="slider-val" id="sizeVal">5</span>
+        <div class="msec" id="msec-pdf">
+          <div class="pdf-drop" id="pdfDrop"
+            onclick="document.getElementById('pfi').click()"
+            ondragover="event.preventDefault();this.classList.add('dv')"
+            ondragleave="this.classList.remove('dv')"
+            ondrop="handlePdfDrop(event)">
+            <div class="pdf-icon">📚</div>
+            <div class="pdf-lbl"><strong>PDF Yükle</strong>Tıkla veya sürükle-bırak</div>
           </div>
+          <input type="file" id="pfi" accept=".pdf" onchange="handlePdfFile(this.files[0])">
+          <div class="pdf-prog" id="pdfProg"></div>
+        </div>
+        <div class="msec" id="msec-text">
+          <textarea id="manualText" placeholder="Metni buraya yapıştır..."></textarea>
+          <input class="si" id="manualTitle" placeholder="Başlık (opsiyonel)" style="margin-top:.6rem;width:100%;">
+          <button class="btn primary" style="margin-top:.6rem;width:100%" onclick="loadManualText()">Önizle →</button>
         </div>
       </div>
     </div>
-
-    <div class="tab-content" id="tab-settings">
-      <div class="controls-grid">
-        <div class="control-group">
-          <label>Noktalama duraklaması</label>
-          <div class="slider-wrap">
-            <input type="range" id="pauseSlider" min="1" max="4" value="2" step="0.5" oninput="document.getElementById('pauseVal').textContent=this.value">
-            <span class="slider-val" id="pauseVal">2</span>
-          </div>
-        </div>
-        <div class="control-group">
-          <label>Bağlam kelimeleri</label>
-          <div class="slider-wrap">
-            <input type="range" id="ctxSlider" min="0" max="3" value="1" step="1" oninput="document.getElementById('ctxVal').textContent=this.value">
-            <span class="slider-val" id="ctxVal">1</span>
-          </div>
+    <div class="source-right">
+      <div class="preview-area" id="previewArea">
+        <div class="load-ind" id="loadInd"><div class="spinner"></div><span id="loadMsg">Yükleniyor...</span></div>
+        <div id="previewContent">
+          <div class="prev-empty"><div class="prev-empty-icon">📖</div><div>Bir kaynak seç veya ara</div><div style="font-size:.7rem;color:var(--muted);margin-top:.25rem">Wikipedia · Gutenberg · PDF · Metin</div></div>
         </div>
       </div>
-    </div>
-
-    <div class="playback">
-      <button class="btn" onclick="skipBack()">⏮ Geri</button>
-      <button class="btn primary" id="playBtn" onclick="togglePlay()">▶ BAŞLAT</button>
-      <button class="btn" onclick="skipForward()">İleri ⏭</button>
-      <button class="btn danger" onclick="resetReader()">↺ Sıfırla</button>
+      <div style="display:flex;align-items:center;justify-content:flex-end;gap:.8rem;">
+        <span id="previewWC" style="font-family:var(--mono);font-size:.68rem;color:var(--muted);"></span>
+        <button class="btn-load" id="btnLoad" onclick="loadIntoReader()" disabled>Okuyucuya Yükle ▶</button>
+      </div>
     </div>
   </div>
-</main>
+</div>
+
+<!-- ═══ LIBRARY ═══ -->
+<div class="tab-panel" id="panel-library">
+  <div class="library-panel">
+    <div class="lib-header">
+      <div class="lib-title">KİTAPLIĞIM</div>
+      <button class="btn danger" onclick="clearLibrary()" style="font-size:.62rem;padding:.35rem .8rem;">Tümünü Sil</button>
+    </div>
+    <div id="libraryContent"></div>
+  </div>
+</div>
+
+</div>
+<div class="notif" id="notif"></div>
 
 <script>
-  let words = [];
-  let index = 0;
-  let timer = null;
-  let isPlaying = false;
-  let wpm = 300;
+if(typeof pdfjsLib!=='undefined') pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-  function getWords() {
-    const text = document.getElementById('textInput').value.trim();
-    return text.split(/\s+/).filter(w => w.length > 0);
-  }
+// ═══ STATE ═══
+let allWords=[];   // full book words
+let words=[];      // active slice (may be page-range subset)
+let idx=0;
+let rangeStart=0;  // word index range start
+let rangeEnd=Infinity;
+let timer=null,playing=false,wpm=300;
+let pendingText='',pendingTitle='';
+let activeFilter='all';
+let currentBookId=null; // key in localStorage
 
-  function updateWPM(val) {
-    wpm = parseInt(val);
-    document.getElementById('wpmVal').textContent = val;
-    document.getElementById('wpmDisplay').textContent = val;
-    if (isPlaying) {
-      clearInterval(timer);
-      scheduleNext();
+const WORDS_PER_PAGE=250;
+
+// ═══ NOTIFY ═══
+function notify(msg,type='ok',dur=3000){const el=document.getElementById('notif');el.textContent=msg;el.className='notif show '+type;clearTimeout(el._t);el._t=setTimeout(()=>el.className='notif',dur);}
+
+// ═══ TABS ═══
+function goTab(tab){
+  document.querySelectorAll('.app-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  document.getElementById('panel-'+tab).classList.add('active');
+  if(tab==='library') renderLibrary();
+}
+
+function switchMethod(m,btn){
+  document.querySelectorAll('.method-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.msec').forEach(s=>s.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('msec-'+m).classList.add('active');
+}
+
+// ═══ WPM / SIZE ═══
+function setWPM(v){wpm=v;document.getElementById('wpmVal').textContent=v;document.getElementById('wpmDisplay').textContent=v;if(playing){clearTimeout(timer);scheduleNext();}}
+function setSize(v){document.getElementById('sizeVal').textContent=v;document.getElementById('wordDisplay').style.fontSize=`clamp(2rem,${v}vw,${v*0.92}rem)`;}
+
+// ═══ ORP ═══
+function orp(word){
+  const letters=word.replace(/[^a-zA-ZğüşıöçĞÜŞİÖÇ]/g,'');
+  if(!letters.length)return`<span>${word}</span>`;
+  const oi=Math.max(0,Math.floor(letters.length/3)-(letters.length>5?1:0));
+  let lc=-1;
+  return word.split('').map(ch=>{if(/[a-zA-ZğüşıöçĞÜŞİÖÇ]/.test(ch))lc++;return lc===oi?`<span class="orp">${ch}</span>`:ch;}).join('');
+}
+
+// ═══ PAGE RANGE ═══
+function applyPageRange(){
+  if(!allWords.length){notify('Önce metin yükle','err');return;}
+  const s=parseInt(document.getElementById('prStart').value)||1;
+  const e=parseInt(document.getElementById('prEnd').value)||Math.ceil(allWords.length/WORDS_PER_PAGE);
+  const totalPages=Math.ceil(allWords.length/WORDS_PER_PAGE);
+  const ps=Math.max(1,Math.min(s,totalPages));
+  const pe=Math.max(ps,Math.min(e,totalPages));
+  rangeStart=(ps-1)*WORDS_PER_PAGE;
+  rangeEnd=Math.min(pe*WORDS_PER_PAGE, allWords.length);
+  words=allWords.slice(rangeStart,rangeEnd);
+  idx=0;
+  const wc=words.length;
+  document.getElementById('prInfo').textContent=`${ps}–${pe}. sayfa · ${wc} kelime`;
+  // show end marker on progress bar
+  const marker=document.getElementById('pageEndMarker');
+  marker.style.display='block';
+  resetDisplay();
+  notify(`✓ Sayfa ${ps}–${pe} yüklendi (${wc} kelime)`,'info');
+}
+
+function clearPageRange(){
+  if(!allWords.length)return;
+  rangeStart=0;rangeEnd=allWords.length;
+  words=[...allWords];
+  idx=0;
+  document.getElementById('prStart').value='';
+  document.getElementById('prEnd').value='';
+  document.getElementById('prInfo').textContent='';
+  document.getElementById('pageEndMarker').style.display='none';
+  resetDisplay();
+  notify('Tüm metin yüklendi','ok');
+}
+
+// ═══ READER CORE ═══
+function pauseMult(w){const p=+document.getElementById('pauseSlider').value;if(/[.!?…]$/.test(w))return p;if(/[,;:\-—]$/.test(w))return p*.5;return 1;}
+
+function showWord(w,i,total){
+  const el=document.getElementById('wordDisplay');
+  el.innerHTML=orp(w);el.classList.remove('pop');void el.offsetWidth;el.classList.add('pop');
+  const ctx=+document.getElementById('ctxSlider').value;
+  const cl=document.getElementById('ctxLine');
+  if(ctx>0){
+    const prev=i>0?words.slice(Math.max(0,i-ctx),i).join(' '):'';
+    const next=i<total-1?words.slice(i+1,Math.min(total,i+1+ctx)).join(' '):'';
+    cl.innerHTML=`<span class="cp">${prev}</span><span class="cn">${next}</span>`;
+  }else cl.innerHTML='';
+
+  // absolute word position in book
+  const absIdx=rangeStart+i;
+  const curPage=Math.ceil((absIdx+1)/WORDS_PER_PAGE);
+  const totalBookPages=Math.ceil(allWords.length/WORDS_PER_PAGE);
+
+  document.getElementById('sWord').textContent=i+1;
+  document.getElementById('sTotal').textContent=total;
+  document.getElementById('sPage').textContent=curPage+'/'+totalBookPages;
+  document.getElementById('sTime').textContent=Math.round((total-i-1)/wpm*60);
+  document.getElementById('sPct').textContent=Math.round((absIdx+1)/allWords.length*100)+'%';
+  document.getElementById('progressBar').style.width=((i+1)/total*100)+'%';
+
+  // autosave every 20 words
+  if(i%20===0) saveProgress(absIdx);
+}
+
+function scheduleNext(){const delay=60000/wpm*pauseMult(words[idx]);timer=setTimeout(()=>{idx++;if(idx>=words.length){finish();return;}showWord(words[idx],idx,words.length);scheduleNext();},delay);}
+function togglePlay(){if(playing)pause();else play();}
+function play(){if(!words.length){notify('Önce metin yükle!','err');return;}if(idx>=words.length)idx=0;playing=true;document.getElementById('playBtn').textContent='⏸ DURDUR';showWord(words[idx],idx,words.length);scheduleNext();}
+function pause(){playing=false;clearTimeout(timer);document.getElementById('playBtn').textContent='▶ DEVAM';}
+function finish(){
+  playing=false;clearTimeout(timer);
+  document.getElementById('playBtn').textContent='▶ BAŞLAT';
+  document.getElementById('wordDisplay').innerHTML='<span class="done-big">BİTTİ ✓</span>';
+  document.getElementById('ctxLine').innerHTML='';
+  document.getElementById('progressBar').style.width='100%';
+  idx=0;
+  saveProgress(rangeEnd-1);
+  notify('Bölüm tamamlandı!','ok');
+}
+function resetDisplay(){
+  pause();
+  document.getElementById('progressBar').style.width='0%';
+  document.getElementById('wordDisplay').innerHTML=`<span class="idle-big">YÜKLENDİ</span><span class="idle-sub">${pendingTitle||words.length+' kelime'}</span>`;
+  document.getElementById('ctxLine').innerHTML='';
+  ['sWord','sTotal','sTime'].forEach(id=>document.getElementById(id).textContent='—');
+  document.getElementById('playBtn').textContent='▶ BAŞLAT';
+}
+function resetReader(){resetDisplay();idx=0;}
+function skipW(n){if(!words.length)return;idx=Math.max(0,Math.min(words.length-1,idx+n));showWord(words[idx],idx,words.length);}
+
+// ═══ LOAD INTO READER ═══
+function loadIntoReader(){
+  if(!pendingText){notify('İçerik yok!','err');return;}
+  allWords=pendingText.trim().split(/\s+/).filter(w=>w.length>0);
+  words=[...allWords];
+  rangeStart=0;rangeEnd=allWords.length;
+  idx=0;playing=false;clearTimeout(timer);
+
+  // check saved progress
+  const saved=loadProgress();
+  if(saved && saved.pos>0){
+    const pct=Math.round(saved.pos/allWords.length*100);
+    if(confirm(`"${pendingTitle}" kitabında ${pct}% tamamlandı (${Math.ceil(saved.pos/WORDS_PER_PAGE)}. sayfa). Kaldığın yerden devam etmek ister misin?`)){
+      idx=saved.pos;
+      // set page range inputs to match
+      const pg=Math.ceil((idx+1)/WORDS_PER_PAGE);
+      document.getElementById('prStart').value=pg;
     }
   }
 
-  function updateSize(val) {
-    document.getElementById('sizeVal').textContent = val;
-    document.documentElement.style.setProperty('--word-size', `clamp(2rem, ${val}vw, ${val * 0.8}rem)`);
-  }
+  document.getElementById('prInfo').textContent='';
+  document.getElementById('pageEndMarker').style.display='none';
+  document.getElementById('prStart').value='';
+  document.getElementById('prEnd').value='';
 
-  function getPauseMult(word) {
-    const pauseFactor = parseFloat(document.getElementById('pauseSlider').value);
-    if (/[.!?]$/.test(word)) return pauseFactor;
-    if (/[,;:]$/.test(word)) return pauseFactor * 0.5;
-    return 1;
-  }
+  const totalPages=Math.ceil(allWords.length/WORDS_PER_PAGE);
+  document.getElementById('wordDisplay').innerHTML=`<span class="idle-big">YÜKLENDİ</span><span class="idle-sub">${pendingTitle} · ${allWords.length.toLocaleString()} kelime · ${totalPages} sayfa</span>`;
+  document.getElementById('progressBar').style.width='0%';
+  document.getElementById('ctxLine').innerHTML='';
+  ['sWord','sTotal','sTime'].forEach(id=>document.getElementById(id).textContent='—');
+  document.getElementById('sPage').textContent='—';
+  document.getElementById('sPct').textContent='—';
+  document.getElementById('playBtn').textContent='▶ BAŞLAT';
 
-  function highlightORP(word) {
-    // ORP: roughly 1/3 from start, min index 0
-    const clean = word.replace(/[^a-zA-ZğüşıöçĞÜŞİÖÇ]/g, '');
-    if (clean.length === 0) return `<span>${word}</span>`;
-    const orpIdx = Math.max(0, Math.floor(clean.length / 3) - (clean.length > 5 ? 1 : 0));
-    // rebuild word with ORP highlighted
-    let charCount = -1;
-    return word.split('').map(ch => {
-      if (/[a-zA-ZğüşıöçĞÜŞİÖÇ]/.test(ch)) charCount++;
-      if (charCount === orpIdx) return `<span class="orp-char">${ch}</span>`;
-      return ch;
-    }).join('');
-  }
+  saveBook();
+  goTab('reader');
+  notify('✓ '+allWords.length.toLocaleString()+' kelime yüklendi · '+totalPages+' sayfa','ok');
+}
 
-  function showWord(w, idx, total) {
-    const el = document.getElementById('wordDisplay');
-    el.innerHTML = highlightORP(w);
-    el.classList.remove('flash');
-    void el.offsetWidth;
-    el.classList.add('flash');
+// ═══ PROGRESS PERSISTENCE ═══
+function bookKey(){return 'book_'+btoa(encodeURIComponent(pendingTitle)).slice(0,20);}
+function saveProgress(pos){
+  if(!pendingTitle||!allWords.length)return;
+  const key=bookKey();
+  const data=JSON.parse(localStorage.getItem(key)||'{}');
+  data.pos=pos;data.total=allWords.length;data.updated=Date.now();
+  localStorage.setItem(key,JSON.stringify(data));
+  currentBookId=key;
+}
+function loadProgress(){
+  if(!pendingTitle)return null;
+  try{return JSON.parse(localStorage.getItem(bookKey()));}catch(e){return null;}
+}
+function saveBook(){
+  if(!pendingTitle||!allWords.length)return;
+  const key=bookKey();
+  const existing=JSON.parse(localStorage.getItem(key)||'{}');
+  const data={
+    ...existing,
+    title:pendingTitle,
+    total:allWords.length,
+    totalPages:Math.ceil(allWords.length/WORDS_PER_PAGE),
+    text:pendingText.slice(0,50000), // store up to 50k chars
+    pos:existing.pos||0,
+    added:existing.added||Date.now(),
+    updated:Date.now()
+  };
+  localStorage.setItem(key,JSON.stringify(data));
+  currentBookId=key;
+}
 
-    // Context
-    const ctx = parseInt(document.getElementById('ctxSlider').value);
-    const ctxEl = document.getElementById('contextWords');
-    if (ctx > 0) {
-      const prev = idx > 0 ? words.slice(Math.max(0, idx - ctx), idx).join(' ') : '';
-      const next = idx < total - 1 ? words.slice(idx + 1, Math.min(total, idx + 1 + ctx)).join(' ') : '';
-      ctxEl.innerHTML = `<span class="prev">${prev}</span><span class="next">${next}</span>`;
-    } else {
-      ctxEl.innerHTML = '';
-    }
-
-    // Stats
-    document.getElementById('statWord').textContent = idx + 1;
-    document.getElementById('statTotal').textContent = total;
-    const remaining = Math.round((total - idx - 1) / wpm * 60);
-    document.getElementById('statTime').textContent = remaining;
-
-    // Progress
-    document.getElementById('progressBar').style.width = ((idx + 1) / total * 100) + '%';
-  }
-
-  function scheduleNext() {
-    const delay = 60000 / wpm * getPauseMult(words[index]);
-    timer = setTimeout(() => {
-      index++;
-      if (index >= words.length) {
-        finish();
-        return;
-      }
-      showWord(words[index], index, words.length);
-      scheduleNext();
-    }, delay);
-  }
-
-  function togglePlay() {
-    if (isPlaying) {
-      pause();
-    } else {
-      play();
+// ═══ LIBRARY ═══
+function renderLibrary(){
+  const container=document.getElementById('libraryContent');
+  const books=[];
+  for(let i=0;i<localStorage.length;i++){
+    const k=localStorage.key(i);
+    if(k.startsWith('book_')){
+      try{const d=JSON.parse(localStorage.getItem(k));if(d.title)books.push({key:k,...d});}catch(e){}
     }
   }
-
-  function play() {
-    words = getWords();
-    if (words.length === 0) return;
-    if (index >= words.length) index = 0;
-
-    isPlaying = true;
-    document.getElementById('playBtn').textContent = '⏸ DURDUR';
-    showWord(words[index], index, words.length);
-    scheduleNext();
+  if(!books.length){
+    container.innerHTML='<div class="lib-empty"><div class="lib-empty-icon">📚</div><div>Henüz kitap yok</div><div style="font-size:.7rem;color:var(--muted);margin-top:.2rem">Kaynak Ekle sekmesinden metin yükle</div></div>';
+    return;
   }
+  books.sort((a,b)=>(b.updated||0)-(a.updated||0));
+  container.innerHTML='<div class="book-grid">'+books.map(b=>{
+    const pct=b.total?Math.round((b.pos||0)/b.total*100):0;
+    const page=Math.ceil(((b.pos||0)+1)/WORDS_PER_PAGE);
+    const date=b.updated?new Date(b.updated).toLocaleDateString('tr-TR'):'';
+    return`<div class="book-card">
+      <div class="bc-title">${b.title}</div>
+      <div class="bc-meta">
+        <span>${(b.total||0).toLocaleString()} kelime</span>
+        <span>${b.totalPages||0} sayfa</span>
+        <span>${date}</span>
+      </div>
+      <div class="bc-progress"><div class="bc-progress-fill" style="width:${pct}%"></div></div>
+      <div class="bc-pct">${pct}% tamamlandı · ${page}. sayfada</div>
+      <div class="bc-actions">
+        <button class="bc-btn" onclick="continueBook('${b.key}')">▶ Devam</button>
+        <button class="bc-btn" onclick="restartBook('${b.key}')">↺ Başa Al</button>
+        <button class="bc-btn del" onclick="deleteBook('${b.key}')">✕ Sil</button>
+      </div>
+    </div>`;
+  }).join('')+'</div>';
+}
 
-  function pause() {
-    isPlaying = false;
-    clearTimeout(timer);
-    document.getElementById('playBtn').textContent = '▶ DEVAM';
-  }
+function continueBook(key){
+  try{
+    const d=JSON.parse(localStorage.getItem(key));
+    if(!d||!d.text){notify('Metin bulunamadı','err');return;}
+    pendingText=d.text;pendingTitle=d.title;
+    allWords=pendingText.trim().split(/\s+/).filter(w=>w.length>0);
+    words=[...allWords];rangeStart=0;rangeEnd=allWords.length;
+    idx=d.pos||0;
+    currentBookId=key;
+    document.getElementById('wordDisplay').innerHTML=`<span class="idle-big">YÜKLENDİ</span><span class="idle-sub">${d.title}</span>`;
+    ['sWord','sTotal','sTime'].forEach(id=>document.getElementById(id).textContent='—');
+    document.getElementById('progressBar').style.width='0%';
+    document.getElementById('ctxLine').innerHTML='';
+    document.getElementById('playBtn').textContent='▶ BAŞLAT';
+    document.getElementById('btnLoad').disabled=false;
+    goTab('reader');
+    notify(`▶ ${d.title} — ${Math.ceil(idx/WORDS_PER_PAGE)}. sayfadan devam`,'info');
+  }catch(e){notify('Hata: '+e.message,'err');}
+}
 
-  function finish() {
-    isPlaying = false;
-    clearTimeout(timer);
-    document.getElementById('playBtn').textContent = '▶ BAŞLAT';
-    document.getElementById('wordDisplay').innerHTML = '<span class="finished-msg">BİTTİ ✓</span>';
-    document.getElementById('contextWords').innerHTML = '';
-    document.getElementById('progressBar').style.width = '100%';
-    index = 0;
-  }
+function restartBook(key){
+  try{
+    const d=JSON.parse(localStorage.getItem(key));
+    d.pos=0;localStorage.setItem(key,JSON.stringify(d));
+    continueBook(key);idx=0;
+  }catch(e){}
+}
 
-  function resetReader() {
-    pause();
-    index = 0;
-    document.getElementById('progressBar').style.width = '0%';
-    document.getElementById('wordDisplay').innerHTML = `<span class="idle-message"><span class="big">HAZIR</span>metni gir ve başla</span>`;
-    document.getElementById('contextWords').innerHTML = '';
-    document.getElementById('statWord').textContent = '—';
-    document.getElementById('statTotal').textContent = '—';
-    document.getElementById('statTime').textContent = '—';
-    document.getElementById('playBtn').textContent = '▶ BAŞLAT';
-  }
+function deleteBook(key){
+  localStorage.removeItem(key);
+  renderLibrary();
+  notify('Kitap silindi','ok');
+}
 
-  function skipBack() {
-    words = getWords();
-    index = Math.max(0, index - 10);
-    if (words.length > 0) showWord(words[index], index, words.length);
-  }
+function clearLibrary(){
+  if(!confirm('Tüm kitaplar silinsin mi?'))return;
+  for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i);if(k&&k.startsWith('book_'))localStorage.removeItem(k);}
+  renderLibrary();notify('Kitaplık temizlendi','ok');
+}
 
-  function skipForward() {
-    words = getWords();
-    index = Math.min(words.length - 1, index + 10);
-    if (words.length > 0) showWord(words[index], index, words.length);
-  }
+// ═══ MANUAL TEXT ═══
+function loadManualText(){
+  const t=document.getElementById('manualText').value.trim();
+  if(!t){notify('Metin gir!','err');return;}
+  const title=document.getElementById('manualTitle').value.trim()||'Manuel Metin';
+  setPending(t,title);showPreview(t,title);
+}
 
-  function switchTab(tab) {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    event.target.classList.add('active');
-    document.getElementById('tab-' + tab).classList.add('active');
-  }
+// ═══ PDF ═══
+function handlePdfDrop(e){e.preventDefault();document.getElementById('pdfDrop').classList.remove('dv');const f=e.dataTransfer.files[0];if(f&&f.type==='application/pdf')handlePdfFile(f);else notify('PDF dosyası bırak','err');}
+async function handlePdfFile(file){
+  if(!file)return;
+  if(typeof pdfjsLib==='undefined'){notify('PDF kütüphanesi yüklenemedi','err');return;}
+  const prog=document.getElementById('pdfProg');
+  prog.style.display='block';prog.textContent='PDF açılıyor...';
+  showLoading(true,'PDF işleniyor...');
+  try{
+    const ab=await file.arrayBuffer();
+    const pdf=await pdfjsLib.getDocument({data:ab}).promise;
+    let text='';
+    for(let p=1;p<=pdf.numPages;p++){
+      prog.textContent=`Sayfa ${p}/${pdf.numPages}...`;
+      const page=await pdf.getPage(p);
+      const content=await page.getTextContent();
+      text+=content.items.map(i=>i.str).join(' ')+'\n';
+    }
+    prog.style.display='none';
+    const title=file.name.replace(/\.pdf$/i,'');
+    setPending(text,title);showPreview(text,title);
+    notify('✓ PDF: '+pdf.numPages+' sayfa yüklendi','ok');
+  }catch(err){prog.style.display='none';showLoading(false);notify('PDF okunamadı: '+err.message,'err');}
+}
 
-  // Keyboard shortcuts
-  document.addEventListener('keydown', e => {
-    if (e.target.tagName === 'TEXTAREA') return;
-    if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
-    if (e.code === 'ArrowLeft') skipBack();
-    if (e.code === 'ArrowRight') skipForward();
-    if (e.code === 'ArrowUp') { wpm = Math.min(1000, wpm + 50); document.getElementById('wpmSlider').value = wpm; updateWPM(wpm); }
-    if (e.code === 'ArrowDown') { wpm = Math.max(60, wpm - 50); document.getElementById('wpmSlider').value = wpm; updateWPM(wpm); }
+// ═══ SEARCH ═══
+function setFilter(el,src){document.querySelectorAll('.fchip').forEach(c=>c.classList.remove('active'));el.classList.add('active');activeFilter=src;}
+
+async function doSearch(){
+  const q=document.getElementById('searchInput').value.trim();
+  if(!q){notify('Bir şey yaz!','err');return;}
+  const list=document.getElementById('resultList');
+  document.getElementById('searchStatus').textContent='Aranıyor...';
+  list.innerHTML='';
+  showLoading(true,'Aranıyor...');
+  const results=[];
+  const ps=[];
+  if(activeFilter==='all'||activeFilter==='wiki')ps.push(searchWiki(q,results));
+  if(activeFilter==='all'||activeFilter==='gutenberg')ps.push(searchGutenberg(q,results));
+  await Promise.allSettled(ps);
+  showLoading(false);
+  document.getElementById('searchStatus').textContent=results.length+' sonuç';
+  if(!results.length){list.innerHTML='<div style="font-family:var(--mono);font-size:.7rem;color:var(--muted);padding:.4rem 0">Sonuç bulunamadı.</div>';return;}
+  list.innerHTML='';
+  results.forEach(r=>{
+    const div=document.createElement('div');div.className='ri';
+    div.innerHTML=`<div class="rt">${r.title}</div><div class="rs"><span class="stag tag-${r.source}">${r.source==='wiki'?'Wikipedia':'Gutenberg'}</span>${r.lang?'<span>'+r.lang.toUpperCase()+'</span>':''}</div>${r.snippet?`<div class="rsnip">${r.snippet}</div>`:''}`;
+    div.onclick=()=>loadResult(r,div);
+    list.appendChild(div);
   });
+}
+
+async function searchWiki(q,results){
+  try{
+    for(const lang of['tr','en']){
+      const url=`https://${lang}.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(q)}&srlimit=4&format=json&origin=*`;
+      const d=await(await fetch(url)).json();
+      (d.query?.search||[]).forEach(item=>results.push({title:item.title,snippet:item.snippet.replace(/<[^>]+>/g,''),source:'wiki',lang,pageId:item.pageid}));
+    }
+  }catch(e){}
+}
+
+async function searchGutenberg(q,results){
+  try{
+    const url=`https://gutendex.com/books/?search=${encodeURIComponent(q)}&languages=tr,en`;
+    const d=await(await fetch(url)).json();
+    (d.results||[]).slice(0,5).forEach(book=>{
+      const txt=book.formats['text/plain; charset=utf-8']||book.formats['text/plain; charset=us-ascii']||book.formats['text/plain'];
+      results.push({title:book.title+(book.authors[0]?' — '+book.authors[0].name:''),snippet:'Yazar: '+(book.authors[0]?.name||'?')+' | Dil: '+book.languages.join(', '),source:'gutenberg',bookId:book.id,txtUrl:txt});
+    });
+  }catch(e){}
+}
+
+async function loadResult(r,el){
+  document.querySelectorAll('.ri').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');
+  showLoading(true,'İçerik yükleniyor...');
+  try{
+    let text='';
+    if(r.source==='wiki'){
+      const lang=r.lang||'en';
+      const url=`https://${lang}.wikipedia.org/w/api.php?action=query&pageids=${r.pageId}&prop=extracts&explaintext=true&format=json&origin=*`;
+      const d=await(await fetch(url)).json();
+      text=Object.values(d.query?.pages||{})[0]?.extract||'';
+    }else if(r.source==='gutenberg'){
+      if(r.txtUrl){
+        const resp=await fetch(r.txtUrl);text=await resp.text();
+        text=text.replace(/[\s\S]*?\*\*\* START OF[^\n]*\n/,'').replace(/\*\*\* END OF[\s\S]*/,'').trim();
+      }else{text='Tam metin mevcut değil. gutenberg.org/ebooks/'+r.bookId;}
+    }
+    if(!text){notify('İçerik alınamadı','err');showLoading(false);return;}
+    setPending(text,r.title);showPreview(text,r.title);showLoading(false);
+  }catch(err){showLoading(false);notify('Yüklenemedi: '+err.message,'err');}
+}
+
+// ═══ PREVIEW ═══
+function showLoading(on,msg=''){
+  const li=document.getElementById('loadInd');
+  li.style.display=on?'flex':'none';
+  if(msg)document.getElementById('loadMsg').textContent=msg;
+}
+function setPending(text,title){
+  pendingText=text;pendingTitle=title;
+  const wc=text.trim().split(/\s+/).filter(w=>w.length>0).length;
+  const pages=Math.ceil(wc/WORDS_PER_PAGE);
+  document.getElementById('previewWC').textContent=wc.toLocaleString()+' kelime · '+pages+' sayfa · ~'+Math.round(wc/wpm)+' dak';
+  document.getElementById('btnLoad').disabled=false;
+}
+function showPreview(text,title){
+  showLoading(false);
+  const preview=text.slice(0,1600)+(text.length>1600?'…':'');
+  document.getElementById('previewContent').innerHTML=`<div class="prev-toolbar"><div class="prev-title">${title}</div></div><div class="prev-text">${preview.replace(/\n/g,'<br>')}</div>`;
+}
+
+// ═══ KEYBOARD ═══
+document.addEventListener('keydown',e=>{
+  const tag=e.target.tagName;
+  if(tag==='TEXTAREA'||tag==='INPUT')return;
+  if(e.code==='Space'){e.preventDefault();togglePlay();}
+  if(e.code==='ArrowLeft')skipW(e.shiftKey?-50:-10);
+  if(e.code==='ArrowRight')skipW(e.shiftKey?50:10);
+  if(e.code==='ArrowUp'){setWPM(Math.min(1000,wpm+50));document.getElementById('wpmSlider').value=wpm;}
+  if(e.code==='ArrowDown'){setWPM(Math.max(60,wpm-50));document.getElementById('wpmSlider').value=wpm;}
+});
 </script>
 </body>
 </html>
