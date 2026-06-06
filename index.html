@@ -178,6 +178,93 @@ textarea::placeholder{color:var(--muted);}
   .playback{gap:.4rem;}
   .page-range-bar{gap:.5rem;}
 }
+
+/* ══ FULLSCREEN MODE ══ */
+.fs-overlay{
+  display:none;
+  position:fixed;inset:0;z-index:500;
+  background:var(--bg);
+  flex-direction:column;
+  align-items:center;justify-content:center;
+  gap:2rem;
+  padding:2rem;
+}
+.fs-overlay.active{display:flex;}
+
+.fs-progress{
+  position:absolute;top:0;left:0;right:0;height:3px;
+  background:var(--border);
+}
+.fs-progress-fill{
+  height:100%;
+  background:linear-gradient(90deg,var(--accent),var(--accent2));
+  width:0%;transition:width .12s;
+}
+
+.fs-word{
+  font-family:var(--display);
+  font-size:clamp(4rem,14vw,10rem);
+  letter-spacing:.04em;
+  text-align:center;
+  line-height:1;
+}
+.fs-word .orp{color:var(--accent2);}
+.fs-word.pop{animation:pop .1s ease;}
+
+.fs-ctx{
+  font-family:var(--mono);font-size:1rem;color:var(--muted);
+  text-align:center;height:1.5em;
+}
+.fs-ctx .cp{opacity:.3;margin-right:.8rem;}
+.fs-ctx .cn{opacity:.3;margin-left:.8rem;}
+
+.fs-stats{
+  display:flex;gap:2.5rem;
+  font-family:var(--mono);font-size:.75rem;color:var(--muted);
+  letter-spacing:.1em;text-transform:uppercase;
+}
+.fs-stats strong{color:var(--text);font-size:1.2rem;display:block;}
+.fs-stats .highlight strong{color:var(--accent4);}
+
+.fs-controls{
+  position:absolute;bottom:2rem;left:50%;transform:translateX(-50%);
+  display:flex;gap:1rem;align-items:center;
+  opacity:0;transition:opacity .3s;
+}
+.fs-overlay:hover .fs-controls,
+.fs-overlay.show-controls .fs-controls{opacity:1;}
+
+.fs-btn{
+  background:rgba(14,15,23,.85);
+  border:1px solid var(--border);color:var(--text);
+  font-family:var(--mono);font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;
+  padding:.6rem 1.3rem;cursor:pointer;border-radius:4px;
+  backdrop-filter:blur(8px);transition:all .15s;
+}
+.fs-btn:hover{border-color:var(--accent);color:var(--accent);}
+.fs-btn.pause-btn{
+  background:rgba(200,241,53,.12);
+  border-color:var(--accent);color:var(--accent);
+  padding:.7rem 2rem;font-size:.9rem;
+}
+.fs-btn.pause-btn:hover{background:rgba(200,241,53,.22);}
+
+.fs-wpm{
+  position:absolute;top:1.2rem;right:1.5rem;
+  font-family:var(--mono);font-size:.7rem;color:var(--muted);
+  opacity:0;transition:opacity .3s;
+}
+.fs-overlay:hover .fs-wpm,
+.fs-overlay.show-controls .fs-wpm{opacity:1;}
+
+.fs-hint{
+  position:absolute;top:1.2rem;left:1.5rem;
+  font-family:var(--mono);font-size:.65rem;color:var(--muted);
+  opacity:0;transition:opacity .3s;letter-spacing:.08em;
+}
+.fs-overlay:hover .fs-hint,
+.fs-overlay.show-controls .fs-hint{opacity:1;}
+
 </style>
 </head>
 <body>
@@ -427,13 +514,16 @@ function showWord(w,i,total){
   document.getElementById('sPct').textContent=Math.round((absIdx+1)/allWords.length*100)+'%';
   document.getElementById('progressBar').style.width=((i+1)/total*100)+'%';
 
+  // update fullscreen display
+  if(document.getElementById('fsOverlay').classList.contains('active')) updateFsDisplay(w,i,total);
+
   // autosave every 20 words
   if(i%20===0) saveProgress(absIdx);
 }
 
 function scheduleNext(){const delay=60000/wpm*pauseMult(words[idx]);timer=setTimeout(()=>{idx++;if(idx>=words.length){finish();return;}showWord(words[idx],idx,words.length);scheduleNext();},delay);}
 function togglePlay(){if(playing)pause();else play();}
-function play(){if(!words.length){notify('Önce metin yükle!','err');return;}if(idx>=words.length)idx=0;playing=true;document.getElementById('playBtn').textContent='⏸ DURDUR';showWord(words[idx],idx,words.length);scheduleNext();}
+function play(){if(!words.length){notify('Önce metin yükle!','err');return;}if(idx>=words.length)idx=0;playing=true;document.getElementById('playBtn').textContent='⏸ DURDUR';enterFullscreen();showWord(words[idx],idx,words.length);scheduleNext();}
 function pause(){playing=false;clearTimeout(timer);document.getElementById('playBtn').textContent='▶ DEVAM';}
 function finish(){
   playing=false;clearTimeout(timer);
@@ -735,6 +825,103 @@ document.addEventListener('keydown',e=>{
   if(e.code==='ArrowUp'){setWPM(Math.min(1000,wpm+50));document.getElementById('wpmSlider').value=wpm;}
   if(e.code==='ArrowDown'){setWPM(Math.max(60,wpm-50));document.getElementById('wpmSlider').value=wpm;}
 });
+
+// ═══ FULLSCREEN ═══
+let fsControlsTimer=null;
+
+function enterFullscreen(){
+  const overlay=document.getElementById('fsOverlay');
+  overlay.classList.add('active');
+  // try native fullscreen
+  if(overlay.requestFullscreen) overlay.requestFullscreen().catch(()=>{});
+  else if(overlay.webkitRequestFullscreen) overlay.webkitRequestFullscreen();
+  showFsControls();
+}
+
+function exitFullscreen(){
+  const overlay=document.getElementById('fsOverlay');
+  overlay.classList.remove('active');
+  if(document.fullscreenElement) document.exitFullscreen().catch(()=>{});
+  else if(document.webkitFullscreenElement) document.webkitExitFullscreen();
+}
+
+function showFsControls(){
+  const overlay=document.getElementById('fsOverlay');
+  overlay.classList.add('show-controls');
+  clearTimeout(fsControlsTimer);
+  fsControlsTimer=setTimeout(()=>overlay.classList.remove('show-controls'),2500);
+}
+
+function fsPause(){
+  exitFullscreen();
+  pause();
+}
+
+function fsSkip(n){
+  skipW(n);
+  showFsControls();
+}
+
+function updateFsDisplay(w,i,total){
+  const el=document.getElementById('fsWord');
+  el.innerHTML=orp(w);
+  el.classList.remove('pop');void el.offsetWidth;el.classList.add('pop');
+  const ctx=+document.getElementById('ctxSlider').value;
+  const cl=document.getElementById('fsCtx');
+  if(ctx>0){
+    const prev=i>0?words.slice(Math.max(0,i-ctx),i).join(' '):'';
+    const next=i<total-1?words.slice(i+1,Math.min(total,i+1+ctx)).join(' '):'';
+    cl.innerHTML=`<span class="cp">${prev}</span><span class="cn">${next}</span>`;
+  }else cl.innerHTML='';
+  const absIdx=rangeStart+i;
+  const curPage=Math.ceil((absIdx+1)/WORDS_PER_PAGE);
+  const totalBookPages=Math.ceil(allWords.length/WORDS_PER_PAGE);
+  document.getElementById('fsSWord').textContent=i+1;
+  document.getElementById('fsSPage').textContent=curPage+'/'+totalBookPages;
+  document.getElementById('fsSTime').textContent=Math.round((total-i-1)/wpm*60);
+  document.getElementById('fsSPct').textContent=Math.round((absIdx+1)/allWords.length*100)+'%';
+  document.getElementById('fsProgressBar').style.width=((i+1)/total*100)+'%';
+  document.getElementById('fsWpmBadge').textContent=wpm+' kpm';
+}
+
+// ESC closes fullscreen
+document.addEventListener('fullscreenchange',()=>{
+  if(!document.fullscreenElement && !document.webkitFullscreenElement){
+    const overlay=document.getElementById('fsOverlay');
+    if(overlay.classList.contains('active')){
+      overlay.classList.remove('active');
+      pause();
+    }
+  }
+});
+
+// mouse move shows controls in fullscreen
+document.getElementById('fsOverlay').addEventListener('mousemove',showFsControls);
+document.getElementById('fsOverlay').addEventListener('touchstart',showFsControls);
+
 </script>
+
+<!-- ═══ FULLSCREEN OVERLAY ═══ -->
+<div class="fs-overlay" id="fsOverlay">
+  <div class="fs-progress"><div class="fs-progress-fill" id="fsProgressBar"></div></div>
+  <div class="fs-hint">ESC · Çıkış &nbsp;|&nbsp; ← → · Atla &nbsp;|&nbsp; ↑↓ · Hız</div>
+  <div class="fs-wpm" id="fsWpmBadge">300 kpm</div>
+  <div class="fs-word" id="fsWord"></div>
+  <div class="fs-ctx" id="fsCtx"></div>
+  <div class="fs-stats">
+    <div class="stat"><strong id="fsSWord">—</strong>kelime</div>
+    <div class="stat highlight"><strong id="fsSPage">—</strong>sayfa</div>
+    <div class="stat"><strong id="fsSTime">—</strong>kalan sn</div>
+    <div class="stat"><strong id="fsSPct">—</strong>%</div>
+  </div>
+  <div class="fs-controls">
+    <button class="fs-btn" onclick="fsSkip(-10)">⏮ −10</button>
+    <button class="fs-btn" onclick="fsSkip(-1)">‹ −1</button>
+    <button class="fs-btn pause-btn" id="fsPauseBtn" onclick="fsPause()">⏸ DURDUR</button>
+    <button class="fs-btn" onclick="fsSkip(1)">+1 ›</button>
+    <button class="fs-btn" onclick="fsSkip(10)">+10 ⏭</button>
+  </div>
+</div>
+
 </body>
 </html>
