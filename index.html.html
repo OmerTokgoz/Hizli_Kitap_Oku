@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hızlı Okuyucu</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;700&family=Bebas+Neue&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --border: #1e1e2e;
+    --accent: #e8ff5a;
+    --accent2: #ff5a8a;
+    --text: #e8e8f0;
+    --muted: #55556a;
+    --word-size: clamp(2.5rem, 8vw, 5rem);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+  }
+
+  /* Noise texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0.4;
+  }
+
+  header {
+    padding: 1.5rem 2rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.8rem;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+  }
+
+  .logo span { color: var(--accent2); }
+
+  .wpm-badge {
+    margin-left: auto;
+    font-size: 0.75rem;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 0.3rem 0.8rem;
+    border-radius: 2px;
+  }
+
+  .wpm-badge strong { color: var(--accent); }
+
+  /* Main layout */
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-rows: 1fr auto;
+    padding: 2rem;
+    gap: 2rem;
+    max-width: 900px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  /* Word display */
+  .stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  .progress-bar-wrap {
+    width: 100%;
+    height: 2px;
+    background: var(--border);
+    border-radius: 1px;
+    margin-bottom: 2rem;
+  }
+
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 1px;
+    width: 0%;
+    transition: width 0.2s ease;
+  }
+
+  .word-container {
+    width: 100%;
+    min-height: 180px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  /* ORP (Optimal Recognition Point) guide */
+  .orp-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--accent2);
+    opacity: 0.15;
+    pointer-events: none;
+  }
+
+  .word-display {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: var(--word-size);
+    letter-spacing: 0.05em;
+    text-align: center;
+    position: relative;
+    transition: opacity 0.05s;
+  }
+
+  .word-display .orp-char {
+    color: var(--accent2);
+  }
+
+  .word-display.flash {
+    animation: wordFlash 0.12s ease;
+  }
+
+  @keyframes wordFlash {
+    0% { opacity: 0; transform: scale(0.95); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+
+  .context-words {
+    margin-top: 1.5rem;
+    font-size: 0.8rem;
+    color: var(--muted);
+    text-align: center;
+    height: 1.5em;
+    letter-spacing: 0.05em;
+  }
+
+  .context-words .prev { opacity: 0.4; margin-right: 0.5rem; }
+  .context-words .next { opacity: 0.4; margin-left: 0.5rem; }
+
+  /* Stats row */
+  .stats-row {
+    display: flex;
+    gap: 2rem;
+    justify-content: center;
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .stat strong {
+    display: block;
+    font-size: 1.2rem;
+    color: var(--text);
+    font-weight: 700;
+  }
+
+  /* Controls panel */
+  .panel {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .panel-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tab {
+    padding: 0.7rem 1.2rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    cursor: pointer;
+    border: none;
+    background: none;
+    color: var(--muted);
+    font-family: inherit;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+  }
+
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .tab-content {
+    display: none;
+    padding: 1.5rem;
+  }
+
+  .tab-content.active { display: block; }
+
+  textarea {
+    width: 100%;
+    min-height: 120px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.85rem;
+    padding: 1rem;
+    border-radius: 2px;
+    resize: vertical;
+    outline: none;
+    line-height: 1.6;
+  }
+
+  textarea:focus { border-color: var(--accent); }
+
+  /* Speed control */
+  .controls-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+
+  .control-group label {
+    display: block;
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.5rem;
+  }
+
+  .slider-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    flex: 1;
+    height: 2px;
+    background: var(--border);
+    outline: none;
+    border-radius: 1px;
+  }
+
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    background: var(--accent);
+    border-radius: 50%;
+    cursor: pointer;
+  }
+
+  .slider-val {
+    font-size: 0.85rem;
+    color: var(--accent);
+    min-width: 3ch;
+    text-align: right;
+  }
+
+  /* Playback buttons */
+  .playback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 1.2rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.6rem 1.2rem;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.15s;
+  }
+
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+    font-weight: 700;
+    padding: 0.7rem 2rem;
+    font-size: 0.9rem;
+  }
+
+  .btn.primary:hover { background: #fff; border-color: #fff; }
+
+  .btn.danger { border-color: var(--accent2); color: var(--accent2); }
+
+  /* Idle state */
+  .idle-message {
+    font-size: 0.85rem;
+    color: var(--muted);
+    text-align: center;
+    letter-spacing: 0.08em;
+  }
+
+  .idle-message .big {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 3rem;
+    color: var(--border);
+    display: block;
+    letter-spacing: 0.1em;
+    line-height: 1;
+    margin-bottom: 0.5rem;
+  }
+
+  /* Finished */
+  .finished-msg {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 3rem;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">HIZLI<span>OKU</span></div>
+  <div class="wpm-badge">Hız: <strong id="wpmDisplay">300</strong> kpm</div>
+</header>
+
+<main>
+  <div class="stage">
+    <div class="progress-bar-wrap">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+
+    <div class="word-container">
+      <div class="word-display" id="wordDisplay">
+        <span class="idle-message">
+          <span class="big">HAZIR</span>
+          metni gir ve başla
+        </span>
+      </div>
+    </div>
+
+    <div class="context-words" id="contextWords"></div>
+
+    <div class="stats-row" style="margin-top:2rem">
+      <div class="stat">
+        <strong id="statWord">—</strong>
+        kelime
+      </div>
+      <div class="stat">
+        <strong id="statTotal">—</strong>
+        toplam
+      </div>
+      <div class="stat">
+        <strong id="statTime">—</strong>
+        kalan sn
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-tabs">
+      <button class="tab active" onclick="switchTab('text')">Metin</button>
+      <button class="tab" onclick="switchTab('settings')">Ayarlar</button>
+    </div>
+
+    <div class="tab-content active" id="tab-text">
+      <textarea id="textInput" placeholder="Okumak istediğin metni buraya yapıştır...">Hızlı okuma tekniği, gözlerin tek tek kelime üzerinde durmasını sağlar. Bu yöntem RSVP olarak bilinir. Beyin, kelimeleri ayrı ayrı işlediğinde çok daha hızlı anlayabilir. Alıştırmayla dakikada beş yüz kelimeye kadar okuyabilirsiniz. Başlamak için oynat düğmesine basın.</textarea>
+      <div class="controls-grid">
+        <div class="control-group">
+          <label>Hız (kelime/dak)</label>
+          <div class="slider-wrap">
+            <input type="range" id="wpmSlider" min="60" max="1000" value="300" step="10" oninput="updateWPM(this.value)">
+            <span class="slider-val" id="wpmVal">300</span>
+          </div>
+        </div>
+        <div class="control-group">
+          <label>Yazı Boyutu</label>
+          <div class="slider-wrap">
+            <input type="range" id="sizeSlider" min="2" max="8" value="5" step="0.5" oninput="updateSize(this.value)">
+            <span class="slider-val" id="sizeVal">5</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-settings">
+      <div class="controls-grid">
+        <div class="control-group">
+          <label>Noktalama duraklaması</label>
+          <div class="slider-wrap">
+            <input type="range" id="pauseSlider" min="1" max="4" value="2" step="0.5" oninput="document.getElementById('pauseVal').textContent=this.value">
+            <span class="slider-val" id="pauseVal">2</span>
+          </div>
+        </div>
+        <div class="control-group">
+          <label>Bağlam kelimeleri</label>
+          <div class="slider-wrap">
+            <input type="range" id="ctxSlider" min="0" max="3" value="1" step="1" oninput="document.getElementById('ctxVal').textContent=this.value">
+            <span class="slider-val" id="ctxVal">1</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="playback">
+      <button class="btn" onclick="skipBack()">⏮ Geri</button>
+      <button class="btn primary" id="playBtn" onclick="togglePlay()">▶ BAŞLAT</button>
+      <button class="btn" onclick="skipForward()">İleri ⏭</button>
+      <button class="btn danger" onclick="resetReader()">↺ Sıfırla</button>
+    </div>
+  </div>
+</main>
+
+<script>
+  let words = [];
+  let index = 0;
+  let timer = null;
+  let isPlaying = false;
+  let wpm = 300;
+
+  function getWords() {
+    const text = document.getElementById('textInput').value.trim();
+    return text.split(/\s+/).filter(w => w.length > 0);
+  }
+
+  function updateWPM(val) {
+    wpm = parseInt(val);
+    document.getElementById('wpmVal').textContent = val;
+    document.getElementById('wpmDisplay').textContent = val;
+    if (isPlaying) {
+      clearInterval(timer);
+      scheduleNext();
+    }
+  }
+
+  function updateSize(val) {
+    document.getElementById('sizeVal').textContent = val;
+    document.documentElement.style.setProperty('--word-size', `clamp(2rem, ${val}vw, ${val * 0.8}rem)`);
+  }
+
+  function getPauseMult(word) {
+    const pauseFactor = parseFloat(document.getElementById('pauseSlider').value);
+    if (/[.!?]$/.test(word)) return pauseFactor;
+    if (/[,;:]$/.test(word)) return pauseFactor * 0.5;
+    return 1;
+  }
+
+  function highlightORP(word) {
+    // ORP: roughly 1/3 from start, min index 0
+    const clean = word.replace(/[^a-zA-ZğüşıöçĞÜŞİÖÇ]/g, '');
+    if (clean.length === 0) return `<span>${word}</span>`;
+    const orpIdx = Math.max(0, Math.floor(clean.length / 3) - (clean.length > 5 ? 1 : 0));
+    // rebuild word with ORP highlighted
+    let charCount = -1;
+    return word.split('').map(ch => {
+      if (/[a-zA-ZğüşıöçĞÜŞİÖÇ]/.test(ch)) charCount++;
+      if (charCount === orpIdx) return `<span class="orp-char">${ch}</span>`;
+      return ch;
+    }).join('');
+  }
+
+  function showWord(w, idx, total) {
+    const el = document.getElementById('wordDisplay');
+    el.innerHTML = highlightORP(w);
+    el.classList.remove('flash');
+    void el.offsetWidth;
+    el.classList.add('flash');
+
+    // Context
+    const ctx = parseInt(document.getElementById('ctxSlider').value);
+    const ctxEl = document.getElementById('contextWords');
+    if (ctx > 0) {
+      const prev = idx > 0 ? words.slice(Math.max(0, idx - ctx), idx).join(' ') : '';
+      const next = idx < total - 1 ? words.slice(idx + 1, Math.min(total, idx + 1 + ctx)).join(' ') : '';
+      ctxEl.innerHTML = `<span class="prev">${prev}</span><span class="next">${next}</span>`;
+    } else {
+      ctxEl.innerHTML = '';
+    }
+
+    // Stats
+    document.getElementById('statWord').textContent = idx + 1;
+    document.getElementById('statTotal').textContent = total;
+    const remaining = Math.round((total - idx - 1) / wpm * 60);
+    document.getElementById('statTime').textContent = remaining;
+
+    // Progress
+    document.getElementById('progressBar').style.width = ((idx + 1) / total * 100) + '%';
+  }
+
+  function scheduleNext() {
+    const delay = 60000 / wpm * getPauseMult(words[index]);
+    timer = setTimeout(() => {
+      index++;
+      if (index >= words.length) {
+        finish();
+        return;
+      }
+      showWord(words[index], index, words.length);
+      scheduleNext();
+    }, delay);
+  }
+
+  function togglePlay() {
+    if (isPlaying) {
+      pause();
+    } else {
+      play();
+    }
+  }
+
+  function play() {
+    words = getWords();
+    if (words.length === 0) return;
+    if (index >= words.length) index = 0;
+
+    isPlaying = true;
+    document.getElementById('playBtn').textContent = '⏸ DURDUR';
+    showWord(words[index], index, words.length);
+    scheduleNext();
+  }
+
+  function pause() {
+    isPlaying = false;
+    clearTimeout(timer);
+    document.getElementById('playBtn').textContent = '▶ DEVAM';
+  }
+
+  function finish() {
+    isPlaying = false;
+    clearTimeout(timer);
+    document.getElementById('playBtn').textContent = '▶ BAŞLAT';
+    document.getElementById('wordDisplay').innerHTML = '<span class="finished-msg">BİTTİ ✓</span>';
+    document.getElementById('contextWords').innerHTML = '';
+    document.getElementById('progressBar').style.width = '100%';
+    index = 0;
+  }
+
+  function resetReader() {
+    pause();
+    index = 0;
+    document.getElementById('progressBar').style.width = '0%';
+    document.getElementById('wordDisplay').innerHTML = `<span class="idle-message"><span class="big">HAZIR</span>metni gir ve başla</span>`;
+    document.getElementById('contextWords').innerHTML = '';
+    document.getElementById('statWord').textContent = '—';
+    document.getElementById('statTotal').textContent = '—';
+    document.getElementById('statTime').textContent = '—';
+    document.getElementById('playBtn').textContent = '▶ BAŞLAT';
+  }
+
+  function skipBack() {
+    words = getWords();
+    index = Math.max(0, index - 10);
+    if (words.length > 0) showWord(words[index], index, words.length);
+  }
+
+  function skipForward() {
+    words = getWords();
+    index = Math.min(words.length - 1, index + 10);
+    if (words.length > 0) showWord(words[index], index, words.length);
+  }
+
+  function switchTab(tab) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    event.target.classList.add('active');
+    document.getElementById('tab-' + tab).classList.add('active');
+  }
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'TEXTAREA') return;
+    if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+    if (e.code === 'ArrowLeft') skipBack();
+    if (e.code === 'ArrowRight') skipForward();
+    if (e.code === 'ArrowUp') { wpm = Math.min(1000, wpm + 50); document.getElementById('wpmSlider').value = wpm; updateWPM(wpm); }
+    if (e.code === 'ArrowDown') { wpm = Math.max(60, wpm - 50); document.getElementById('wpmSlider').value = wpm; updateWPM(wpm); }
+  });
+</script>
+</body>
+</html>
